@@ -1,47 +1,37 @@
-name: Update Bitcoin ETF page
+name: Update Signal
 
 on:
   schedule:
-    - cron: '30 23 * * *'
+    - cron: "30 23 * * *"   # codziennie 18:00 UTC
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  update:
-
+  build:
     runs-on: ubuntu-latest
 
     steps:
-
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          playwright install chromium
 
-      - name: Run scraper
+      - name: Run script
         run: python scraper.py
 
-      - name: Commit updated page
+      - name: Commit updated HTML
         run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
           git add index.html
-
-          git diff --cached --quiet || git commit -m "Daily update"
-
+          git commit -m "update signal" || echo "no changes"
           git push
