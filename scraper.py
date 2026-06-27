@@ -71,7 +71,7 @@ def save_html(date, close, sma20, sma200, signal):
     </html>
     """
 
-    with open("signal.html", "w", encoding="utf-8") as f:
+    with open("index.html", "w", encoding="utf-8") as f:
         f.write(html)
 
 
@@ -112,7 +112,7 @@ def main():
 
     save_html(date, close, sma20, sma200, signal)
 
-    print(f"OK -> signal.html (REAL closed: {date})")
+    print(f"OK -> index.html (REAL closed: {date})")
 
 
 if __name__ == "__main__":
