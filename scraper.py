@@ -51,7 +51,7 @@ def save_html(date, close, sma20, sma200, signal):
         <title>WBTC Signal</title>
         <style>
             body {{ font-family: Arial; margin: 20px; }}
-            .box {{ padding: 20px; border: 1px solid #ccc; width: 300px; }}
+            # .box {{ padding: 20px; border: 1px solid #ccc; width: 300px; }}
         </style>
     </head>
     <body>
