@@ -1,158 +1,119 @@
-import re
-from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright
+import yfinance as yf
+import pandas as pd
+from datetime import datetime
+
+TICKER = "WBTC.PA"
 
 
-START_URL = "https://www.justetf.com/en/how-to/invest-in-bitcoin.html"
+def get_data():
+    data = yf.download(
+        TICKER,
+        start="2026-01-08",
+        interval="1d",
+        auto_adjust=False,
+        progress=False
+    )
+
+    # zabezpieczenie MultiIndex (czasem yfinance to robi)
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = data.columns.droplevel(1)
+
+    return data
 
 
-def extract_isins(html):
-    soup = BeautifulSoup(html, "html.parser")
-    isins = set()
+def add_sma(data):
+    data = data.copy()
+    
+    # tylko zamkniecia
+    close = data["Close"]
 
-    for a in soup.find_all("a", href=True):
-        if "etf-profile.html?isin=" in a["href"]:
-            match = re.search(r"isin=([A-Z0-9]+)", a["href"])
-            if match:
-                isins.add(match.group(1))
+    # min_periods=1 pozwala na liczenie SMA z dostepnych dni, jesli jest ich mniej niz 20 lub 200
+    data["SMA20"] = close.rolling(20, min_periods=1).mean()
+    data["SMA200"] = close.rolling(200, min_periods=1).mean()
 
-    return list(isins)
+    return data
 
 
-def parse_number(s):
-    s = s.strip()
-
-    # przypadek EU / US mieszany
-    # 1,069.23 → 1069.23
-    # 1.069,23 → 1069.23
-
-    if "," in s and "." in s:
-        if s.rfind(",") > s.rfind("."):
-            # EU format: 1.069,23
-            s = s.replace(".", "").replace(",", ".")
-        else:
-            # US format: 1,069.23
-            s = s.replace(",", "")
+def generate_signal(close, sma20, sma200):
+    
+    if close < sma20 and close < sma200:
+        return "BUY"
+    elif close > sma20 and close > sma200:
+        return "SELL"
     else:
-        # tylko przecinki → tysiące
-        if "," in s:
-            s = s.replace(",", "")
-        # tylko kropki → mogą być tysiące lub decimal
-        # heurystyka: jeśli 3 cyfry po kropce → tysiące
-        if "." in s:
-            parts = s.split(".")
-            if len(parts) > 2 or len(parts[-1]) == 3:
-                s = s.replace(".", "")
+        return "BUY/SELL"
+    
 
-    return float(s)
+def save_html(date, close, sma20, sma200, signal):
+    html = f"""
+    <html>
+    <head>
+        <title>WBTC Signal</title>
+        <style>
+            body {{ font-family: Arial; margin: 20px; }}
+            .box {{ padding: 20px; border: 1px solid #ccc; width: 300px; }}
+        </style>
+    </head>
+    <body>
+        <div class="box">
+            <h2>WBTC (GB00BJYDH287)</h2>
 
+            <p><b>Last CLOSED session:</b> {date}</p>
+            <p><b>Close:</b> {close:.2f} EUR</p>
+            <p><b>SMA20:</b> {sma20:.2f}</p>
+            <p><b>SMA200:</b> {sma200:.2f}</p>
 
-def extract_aum(page):
-    html = page.content()
-    soup = BeautifulSoup(html, "html.parser")
+            <h3>Signal: {signal}</h3>
 
-    for text in soup.stripped_strings:
-        t = text.lower()
+            <p><i>Generated: {datetime.now()}</i></p>
+        </div>
+    </body>
+    </html>
+    """
 
-        if ("bn" in t or "m" in t) and any(c.isdigit() for c in t):
-
-            match = re.search(r'([\d.,]+)\s*(bn|m)', t, re.I)
-            if match:
-                number = parse_number(match.group(1))
-                unit = match.group(2).lower()
-
-                # konwersja do mln EUR
-                return number * 1000 if unit == "bn" else number
-
-    return None
-
-
-with sync_playwright() as p:
-    browser = p.chromium.launch(headless=True)
-    page = browser.new_page()
-
-    page.set_default_timeout(60000)
-
-    # 1. start
-    page.goto(START_URL, wait_until="domcontentloaded")
-
-    html = page.content()
-    isins = extract_isins(html)
-
-    # print(f"Znaleziono ISIN: {len(isins)}")
-
-    results = []
-
-    # 2. ETF profile
-    for isin in isins:
-        url = f"https://www.justetf.com/en/etf-profile.html?isin={isin}"
-
-        try:
-            page.goto(url, wait_until="domcontentloaded", timeout=60000)
-        except:
-            print(f"Timeout: {isin}")
-            continue
-
-        name = page.title()
-        aum = extract_aum(page)
-
-        if aum:
-            results.append({
-                "isin": isin,
-                "name": name,
-                "aum_million": aum
-            })
-
-    browser.close()
-
-
-# 3. sortowanie
-results = [r for r in results if r["aum_million"] is not None]
-results.sort(key=lambda x: x["aum_million"], reverse=True)
-
-# if results:
-#     top2 = results[:2]
-
-#     print("\n🔥 2 NAJWIĘKSZE BITCOIN ETF/ETN:\n")
-
-#     for i, etf in enumerate(top2, start=1):
-#         print(f"{i}. {etf['name']}")
-#         print(f"   ISIN: {etf['isin']}")
-#         print(f"   AUM (mln EUR): {etf['aum_million']:.2f}")
-#         print()
-# else:
-#     print("Brak danych")
-
-if results:
-    top2 = results[:2]
-
-    html = """<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <title>2 największe Bitcoin ETF/ETN</title>
-</head>
-<body>
-    <h1>🔥 2 największe Bitcoin ETF/ETN</h1>
-"""
-
-    for i, etf in enumerate(top2, start=1):
-        html += f"""
-    <h2>{i}. {etf['name']}</h2>
-    <ul>
-        <li><strong>ISIN:</strong> {etf['isin']}</li>
-        <li><strong>AUM (mln EUR):</strong> {etf['aum_million']:.2f}</li>
-    </ul>
-"""
-
-    html += """
-</body>
-</html>
-"""
-
-    with open("index.html", "w", encoding="utf-8") as f:
+    with open("signal.html", "w", encoding="utf-8") as f:
         f.write(html)
 
-    print("Zapisano plik index.html")
-else:
-    print("Brak danych")
+
+def main():
+    data = get_data()
+    
+    if data.empty:
+        print("Błąd: Brak danych z yfinance.")
+        return
+
+    # KLUCZ: usuwamy dzisiejszy dzien (niezamknieta swieca)
+    today = pd.Timestamp.today().normalize()
+    data = data[data.index < today]
+
+    if data.empty:
+        print("Błąd: Brak danych po odrzuceniu dzisiejszej sesji.")
+        return
+
+    data = add_sma(data)
+
+    # pd.set_option("display.max_rows", None)
+    # pd.set_option("display.max_columns", None)
+    # pd.set_option("display.width", None)
+    # pd.set_option("display.max_colwidth", None)
+    # data = data.dropna()
+    # last_200 = data["Close"].tail(200)
+
+    # print(last_200)
+
+    last = data.iloc[-1]
+
+    date = last.name.date()
+    close = float(last["Close"])
+    sma20 = float(last["SMA20"])
+    sma200 = float(last["SMA200"])
+
+    signal = generate_signal(close, sma20, sma200)
+
+    save_html(date, close, sma20, sma200, signal)
+
+    print(f"OK -> signal.html (REAL closed: {date})")
+
+
+if __name__ == "__main__":
+    main()
