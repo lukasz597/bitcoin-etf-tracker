@@ -1,6 +1,8 @@
 name: Update Signal
 
 on:
+  schedule:
+    - cron: "30 23 * * *"   # codziennie 18:00 UTC
   workflow_dispatch:
 
 permissions:
