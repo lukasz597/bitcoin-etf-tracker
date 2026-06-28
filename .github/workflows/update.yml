@@ -1,10 +1,8 @@
 name: Update Signal
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"  
-  workflow_dispatch:
-
+  repository_dispatch:
+    types: [odpal_skrypt]
 permissions:
   contents: write
 
