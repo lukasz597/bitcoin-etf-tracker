@@ -1,7 +1,7 @@
 import yfinance as yf
 import pandas as pd
 from datetime import datetime
-
+from zoneinfo import ZoneInfo
 
 TICKER = "WBTC.PA"
 
@@ -66,7 +66,7 @@ def save_html(date, close, sma20, sma200, signal):
 
             <h3>Signal: {signal}</h3>
 
-            <p><i>Generated: {datetime.now()}</i></p>
+            <p><i>Generated: {datetime.now(ZoneInfo("Europe/Warsaw")).strftime("%Y-%m-%d %H:%M:%S")}</i></p>
         </div>
     </body>
     </html>
