@@ -84,12 +84,12 @@ def main():
         return
 
     # KLUCZ: usuwamy dzisiejszy dzien (niezamknieta swieca)
-    today = pd.Timestamp.today().normalize()
-    data = data[data.index < today]
+    # today = pd.Timestamp.today().normalize()
+    # data = data[data.index < today]
 
-    if data.empty:
-        print("Błąd: Brak danych po odrzuceniu dzisiejszej sesji.")
-        return
+    # if data.empty:
+    #     print("Błąd: Brak danych po odrzuceniu dzisiejszej sesji.")
+    #     return
 
     data = add_sma(data)
 
